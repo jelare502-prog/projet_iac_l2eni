@@ -95,13 +95,3 @@ Les configurations sont sauvegardées automatiquement
 👤 Auteur
 [Johnny]
 Étudiant en L2 Informatique
-
-
-Sauvegarde (`Ctrl+O`, `Entrée`, `Ctrl+X`).
-
----
-
-## ✅ Vérifie
-
-```bash
-cat ~/projet_iac_l2eni/README.md
