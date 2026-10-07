@@ -1,0 +1,74 @@
+---
+# ===== UFW =====
+- name: Installer UFW
+  apt:
+    name: ufw
+    state: present
+    update_cache: yes
+
+- name: UFW - Refuser le trafic entrant par défaut
+  community.general.ufw:
+    direction: incoming
+    policy: deny
+
+- name: UFW - Autoriser le trafic sortant par défaut
+  community.general.ufw:
+    direction: outgoing
+    policy: allow
+
+- name: UFW - Autoriser SSH
+  community.general.ufw:
+    rule: allow
+    port: '22'
+    proto: tcp
+
+- name: UFW - Autoriser HTTP
+  community.general.ufw:
+    rule: allow
+    port: '80'
+    proto: tcp
+
+- name: UFW - Autoriser DNS (TCP et UDP)
+  community.general.ufw:
+    rule: allow
+    port: '53'
+    proto: "{{ item }}"
+  loop:
+    - tcp
+    - udp
+
+- name: UFW - Activer le pare-feu
+  community.general.ufw:
+    state: enabled
+
+# ===== Fail2ban =====
+- name: Installer Fail2ban
+  apt:
+    name: fail2ban
+    state: present
+
+- name: Configurer Fail2ban pour SSH
+  copy:
+    dest: /etc/fail2ban/jail.local
+    content: |
+      [DEFAULT]
+      bantime = 600
+      findtime = 600
+      maxretry = 5
+      backend = systemd
+
+      [sshd]
+      enabled = true
+      port = 22
+      logpath = %(sshd_log)s
+      maxretry = 5
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart Fail2ban
+
+- name: Démarrer et activer Fail2ban
+  systemd:
+    name: fail2ban
+    state: started
+    enabled: yes

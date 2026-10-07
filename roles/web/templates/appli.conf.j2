@@ -1,0 +1,17 @@
+<VirtualHost *:80>
+    ServerName appli.{{ domain_name }}
+    DocumentRoot /var/www/html/appli
+
+    <Directory /var/www/html/appli>
+        AuthType Basic
+        AuthName "Acces restreint - LDAP"
+        AuthBasicProvider ldap
+        AuthLDAPURL "ldap://localhost/dc=l2eni,dc=mg?uid?sub?(objectClass=*)"
+        AuthLDAPBindDN "cn=admin,dc=l2eni,dc=mg"
+        AuthLDAPBindPassword {{ admin_password }}
+        Require valid-user
+    </Directory>
+
+    ErrorLog ${APACHE_LOG_DIR}/appli_error.log
+    CustomLog ${APACHE_LOG_DIR}/appli_access.log combined
+</VirtualHost>

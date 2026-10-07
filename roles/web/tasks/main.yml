@@ -1,0 +1,184 @@
+---
+# Tâche 1 : Installer debconf-utils
+- name: Installer debconf-utils
+  apt:
+    name: debconf-utils
+    state: present
+    update_cache: yes
+
+# Tâche 2 : Purger slapd s'il est mal configuré
+- name: Purger slapd et ses configurations
+  apt:
+    name: slapd
+    state: absent
+    purge: yes
+  ignore_errors: yes
+
+# Tâche 3 : Supprimer les résidus de slapd
+- name: Supprimer les résidus de slapd
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/ldap
+    - /var/lib/ldap
+
+# Tâche 4 : Pré-configurer le domaine LDAP
+- name: Pré-configurer le domaine LDAP
+  debconf:
+    name: slapd
+    question: slapd/domain
+    value: "{{ domain_name }}"
+    vtype: string
+
+# Tâche 5 : Pré-configurer l'organisation LDAP
+- name: Pré-configurer l'organisation LDAP
+  debconf:
+    name: slapd
+    question: slapd/organization
+    value: "l2eni"
+    vtype: string
+
+# Tâche 6 : Pré-configurer le mot de passe admin LDAP
+- name: Pré-configurer le mot de passe admin LDAP
+  debconf:
+    name: slapd
+    question: slapd/root_password
+    value: "{{ admin_password }}"
+    vtype: password
+
+# Tâche 7 : Confirmer le mot de passe admin LDAP
+- name: Confirmer le mot de passe admin LDAP
+  debconf:
+    name: slapd
+    question: slapd/root_password_again
+    value: "{{ admin_password }}"
+    vtype: password
+
+# Tâche 8 : Installer les paquets
+- name: Installer Apache2, PHP, OpenLDAP, phpLDAPadmin et python3-ldap
+  apt:
+    name:
+      - apache2
+      - php
+      - php-ldap
+      - libapache2-mod-php
+      - slapd
+      - ldap-utils
+      - phpldapadmin
+      - python3-ldap
+    state: present
+    update_cache: yes
+
+# Forcer le mot de passe admin LDAP (contournement bug Ubuntu 24.04)
+- name: Forcer le mot de passe admin LDAP via cn=config
+  ansible.builtin.shell: |
+    HASH=$(slappasswd -s "{{ admin_password }}")
+    cat > /tmp/setpasswd.ldif <<EOF
+    dn: olcDatabase={1}mdb,cn=config
+    changetype: modify
+    replace: olcRootPW
+    olcRootPW: $HASH
+    EOF
+    ldapmodify -Y EXTERNAL -H ldapi:/// -f /tmp/setpasswd.ldif
+  changed_when: false
+# Tâche 9 : Créer la base dc=l2eni,dc=mg
+- name: Créer la base dc=l2eni,dc=mg
+  community.general.ldap_entry:
+    dn: "dc=l2eni,dc=mg"
+    objectClass:
+      - dcObject
+      - organization
+    attributes:
+      o: "l2eni"
+    state: present
+    server_uri: ldap://localhost
+    bind_dn: "cn=admin,dc=l2eni,dc=mg"
+    bind_pw: "{{ admin_password }}"
+
+# Tâche 10 : Copier le template LDIF
+- name: Copier le template LDIF dans /tmp
+  template:
+    src: users.ldif.j2
+    dest: /tmp/users.ldif
+    mode: '0600'
+
+# Tâche 11 : Ajouter les utilisateurs
+- name: Ajouter les utilisateurs dans LDAP
+  ansible.builtin.shell: |
+    ldapadd -x -D "cn=admin,dc=l2eni,dc=mg" -w "{{ admin_password }}" -f /tmp/users.ldif
+  args:
+    creates: /etc/ldap/.users_created
+
+# Tâche 12 : Marquer comme créés
+- name: Marquer les utilisateurs comme créés
+  ansible.builtin.file:
+    path: /etc/ldap/.users_created
+    state: touch
+    mode: '0644'
+
+
+
+# Activer les modules Apache LDAP
+- name: Activer les modules Apache ldap et authnz_ldap
+  community.general.apache2_module:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - ldap
+    - authnz_ldap
+  notify: Reload Apache
+
+# Créer le dossier du site
+- name: Créer le dossier /var/www/html/appli
+  file:
+    path: /var/www/html/appli
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: '0755'
+
+# Créer le VirtualHost appli.l2eni.mg
+- name: Créer le VirtualHost appli.l2eni.mg
+  template:
+    src: appli.conf.j2
+    dest: /etc/apache2/sites-available/appli.l2eni.mg.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload Apache
+
+# Créer la page d'accueil du site
+- name: Créer la page d'accueil du site
+  copy:
+    dest: /var/www/html/appli/index.html
+    content: |
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Dashboard - Infrastructure l2eni.mg</title>
+      </head>
+      <body>
+        <h1>Bienvenue sur le site protege par LDAP</h1>
+        <p>Vous etes connecte en tant qu'utilisateur LDAP.</p>
+        <p>Domaine : {{ domain_name }}</p>
+      </body>
+      </html>
+    owner: www-data
+    group: www-data
+    mode: '0644'
+
+# Activer le site
+- name: Activer le site appli.l2eni.mg
+  ansible.builtin.shell: a2ensite appli.l2eni.mg.conf
+  args:
+    creates: /etc/apache2/sites-enabled/appli.l2eni.mg.conf
+  notify: Reload Apache
+
+# Désactiver le site par défaut (optionnel, pour éviter les conflits)
+- name: Désactiver le site par défaut d'Apache
+  ansible.builtin.shell: a2dissite 000-default.conf
+  args:
+    removes: /etc/apache2/sites-enabled/000-default.conf
+  notify: Reload Apache

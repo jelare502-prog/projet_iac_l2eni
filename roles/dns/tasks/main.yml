@@ -1,0 +1,39 @@
+---
+# 1. Installer BIND9
+- name: Installer BIND9 et ses utilitaires
+  apt:
+    name:
+      - bind9
+      - bind9-utils
+      - bind9-doc
+    state: present
+    update_cache: yes
+
+# 2. Créer le fichier de zone
+- name: Créer le fichier de zone l2eni.mg
+  template:
+    src: db.l2eni.mg.j2
+    dest: /etc/bind/db.l2eni.mg
+    owner: root
+    group: bind
+    mode: '0644'
+  notify: Restart BIND9
+
+# 3. Déclarer la zone dans named.conf.local
+- name: Déclarer la zone dans named.conf.local
+  blockinfile:
+    path: /etc/bind/named.conf.local
+    block: |
+      zone "{{ domain_name }}" {
+          type master;
+          file "/etc/bind/db.{{ domain_name }}";
+      };
+    marker: "// {mark} ANSIBLE MANAGED BLOCK"
+  notify: Restart BIND9
+
+# 4. S'assurer que BIND9 est démarré et activé
+- name: Démarrer et activer BIND9
+  systemd:
+    name: bind9
+    state: started
+    enabled: yes

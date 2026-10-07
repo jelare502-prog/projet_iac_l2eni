@@ -1,0 +1,8 @@
+---
+- name: Déploiement de l'infrastructure l2eni.mg
+  hosts: local
+  become: yes
+  roles:
+    - dns
+    - web
+    - security

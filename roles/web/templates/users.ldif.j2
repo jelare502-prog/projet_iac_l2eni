@@ -1,0 +1,33 @@
+dn: ou=People,dc=l2eni,dc=mg
+objectClass: organizationalUnit
+ou: People
+
+dn: uid=testuser,ou=People,dc=l2eni,dc=mg
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: shadowAccount
+uid: testuser
+sn: User
+givenName: Test
+cn: Test User
+displayName: Test User
+uidNumber: 10000
+gidNumber: 10000
+homeDirectory: /home/testuser
+userPassword: {{ testuser_password }}
+loginShell: /bin/bash
+
+dn: uid=alice,ou=People,dc=l2eni,dc=mg
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: shadowAccount
+uid: alice
+sn: Dupont
+givenName: Alice
+cn: Alice Dupont
+displayName: Alice Dupont
+uidNumber: 10001
+gidNumber: 10001
+homeDirectory: /home/alice
+userPassword: {{ alice_password }}
+loginShell: /bin/bash
